@@ -53,7 +53,7 @@ any desired areas to the file. The structure is as follows:
   "definitions": {
     "area_menu": {
       "type": "object",
-      "additionalProperties": {"$ref": "#/definitions/area"}
+      "additionalProperties": {"$ref": "#/definitions/area"},
     },
     "area": {
       "type": "object",
@@ -111,15 +111,18 @@ any desired areas to the file. The structure is as follows:
 }
 ```
 
-`archive_ranges` is optional, but takes precedence over `bounding_box` when
-non-empty. Remove it to restore bounding-box selection. The default ranges can
-be checked or regenerated with `uv run scripts/update_download_regions.py` and
-`uv run scripts/update_download_regions.py --write`, respectively.
-Pass `--menu PATH` to process another menu; the updater regenerates whichever of
-the `nation` and `us_state` sections are present and leaves other sections unchanged.
-
 Note the optional submenu value in an area. The submenu value allows for
 chaining of the menus when requesting a download, so the submenu value should
 exactly match a top level key in the main object. This value is not used by the
 cli tui however, so selecting an entry with a submenu in the tui will just
 result in that entry being downloaded.
+
+`archive_ranges` is optional, but takes precedence over `bounding_box` when
+non-empty. Each row must contain exactly three grid-aligned integers within the
+world bounds, and its maximum longitude must be greater than its minimum.
+Remove it to restore bounding-box selection. From the repository root, check
+the generated ranges with `go run ./cmd/update-download-regions` or update them
+with `go run ./cmd/update-download-regions --write`. Run the check after changing
+menu bounds or source pins. Existing menu bounds select which disconnected
+source components belong to each region, so new countries and newly relevant
+detached territories require an intentional menu change.

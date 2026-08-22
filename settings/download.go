@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
 	"log/slog"
 	"math"
 	"net/http"
@@ -27,8 +28,22 @@ type LocationData struct {
 // ArchiveRange is [minimum latitude, inclusive minimum longitude, exclusive maximum longitude] for a 2-degree latitude band.
 type ArchiveRange [3]int
 
-func (r ArchiveRange) coordinates() (latitude, minLongitude, maxLongitude int) {
-	return r[0], r[1], r[2]
+func (r *ArchiveRange) UnmarshalJSON(data []byte) error {
+	var coordinates []int
+	if err := json.Unmarshal(data, &coordinates); err != nil {
+		return err
+	}
+	if len(coordinates) != len(ArchiveRange{}) {
+		return fmt.Errorf("archive range must contain three coordinates")
+	}
+
+	latitude, minLongitude, maxLongitude := coordinates[0], coordinates[1], coordinates[2]
+	if latitude < -90 || latitude >= 90 || minLongitude < -180 || maxLongitude > 180 || minLongitude >= maxLongitude ||
+		latitude%GROUP_AREA_BOX_DEGREES != 0 || minLongitude%GROUP_AREA_BOX_DEGREES != 0 || maxLongitude%GROUP_AREA_BOX_DEGREES != 0 {
+		return fmt.Errorf("invalid archive range %v", coordinates)
+	}
+	*r = ArchiveRange{latitude, minLongitude, maxLongitude}
+	return nil
 }
 
 type DownloadMenu map[string]map[string]LocationData
@@ -171,24 +186,31 @@ func adjustedBounds(bounds Bounds) (int, int, int, int) {
 	return minLat, minLon, maxLat, maxLon
 }
 
-func archiveRangesForLocation(location LocationData) []ArchiveRange {
-	if len(location.ArchiveRanges) > 0 {
-		return location.ArchiveRanges
-	}
+func archiveRangesForLocation(location LocationData) iter.Seq[ArchiveRange] {
+	return func(yield func(ArchiveRange) bool) {
+		if len(location.ArchiveRanges) > 0 {
+			for _, archiveRange := range location.ArchiveRanges {
+				if !yield(archiveRange) {
+					return
+				}
+			}
+			return
+		}
 
-	minLat, minLon, maxLat, maxLon := adjustedBounds(location.BoundingBox)
-	var archiveRanges []ArchiveRange
-	for lat := minLat; lat < maxLat; lat += GROUP_AREA_BOX_DEGREES {
-		archiveRanges = append(archiveRanges, ArchiveRange{lat, minLon, maxLon})
+		minLat, minLon, maxLat, maxLon := adjustedBounds(location.BoundingBox)
+		for latitude := minLat; latitude < maxLat; latitude += GROUP_AREA_BOX_DEGREES {
+			if !yield(ArchiveRange{latitude, minLon, maxLon}) {
+				return
+			}
+		}
 	}
-	return archiveRanges
 }
 
 func (d *download) downloadLocation(location LocationData, locationName string) (err error, cancel bool) {
 	slog.Info("Downloading Location", "location", locationName)
 
-	for _, archiveRange := range archiveRangesForLocation(location) {
-		latitude, minLongitude, maxLongitude := archiveRange.coordinates()
+	for archiveRange := range archiveRangesForLocation(location) {
+		latitude, minLongitude, maxLongitude := archiveRange[0], archiveRange[1], archiveRange[2]
 		for longitude := minLongitude; longitude < maxLongitude; longitude += GROUP_AREA_BOX_DEGREES {
 			select { // nonblocking update of progress
 			case d.progressChan <- d.progress:
@@ -293,13 +315,19 @@ func (d *download) downloadLocation(location LocationData, locationName string) 
 	return nil, false
 }
 
+func countFilesForBounds(bounds Bounds) int {
+	minLat, minLon, maxLat, maxLon := adjustedBounds(bounds)
+	return ((maxLat - minLat) / GROUP_AREA_BOX_DEGREES) * ((maxLon - minLon) / GROUP_AREA_BOX_DEGREES)
+}
+
 func countFilesForLocation(location LocationData) int {
+	if len(location.ArchiveRanges) == 0 {
+		return countFilesForBounds(location.BoundingBox)
+	}
+
 	totalFiles := 0
-	for _, archiveRange := range archiveRangesForLocation(location) {
-		_, minLongitude, maxLongitude := archiveRange.coordinates()
-		for longitude := minLongitude; longitude < maxLongitude; longitude += GROUP_AREA_BOX_DEGREES {
-			totalFiles++
-		}
+	for _, archiveRange := range location.ArchiveRanges {
+		totalFiles += (archiveRange[2] - archiveRange[1]) / GROUP_AREA_BOX_DEGREES
 	}
 	return totalFiles
 }
