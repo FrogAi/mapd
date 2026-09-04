@@ -10,39 +10,25 @@ type Curvature struct {
 }
 
 func CalculateCurvature(a Position, b Position, c Position) Curvature {
-	lengthA := a.distanceTo(b)
-	lengthB := a.distanceTo(c)
-	lengthC := b.distanceTo(c)
-
-	lengthProd := lengthA * lengthB * lengthC
-	if lengthProd == 0 {
+	distanceAB := a.distanceTo(b)
+	distanceAC := a.distanceTo(c)
+	distanceBC := b.distanceTo(c)
+	distanceProduct := distanceAB * distanceAC * distanceBC
+	if distanceProduct == 0 {
 		return Curvature{Pos: b}
 	}
 
+	semiperimeter := (distanceAB + distanceAC + distanceBC) / 2
+	areaSquared := semiperimeter * (semiperimeter - distanceAB) * (semiperimeter - distanceAC) * (semiperimeter - distanceBC)
+	// Rounding can make the squared area slightly negative for nearly straight roads.
 	res := Curvature{Pos: b}
-
-	x, y, z := lengthA, lengthB, lengthC
-	if x < y {
-		x, y = y, x
-	}
-	if x < z {
-		x, z = z, x
-	}
-	if y < z {
-		y, z = z, y
-	}
-
-	areaProduct := (x + (y + z)) * (z - (x - y)) * (z + (x - y)) * (x + (y - z))
-	if areaProduct <= 0 {
-		res.ArcLength = lengthB
+	res.Curvature = 4 * m.Sqrt(max(0, areaSquared)) / distanceProduct
+	if res.Curvature == 0 {
+		res.ArcLength = distanceAC
 		return res
 	}
 
-	area := 0.25 * m.Sqrt(areaProduct)
-	res.Curvature = 4 * area / lengthProd
-
-	res.Angle = 2 * m.Asin(m.Min(1, lengthB*res.Curvature/2))
+	res.Angle = 2 * m.Asin(min(1, distanceAC*res.Curvature/2))
 	res.ArcLength = res.Angle / res.Curvature
-
 	return res
 }

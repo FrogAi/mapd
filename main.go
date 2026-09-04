@@ -32,9 +32,13 @@ func main() {
 		Pub:   cereal.NewPublisher("mapdExtendedOut", cereal.MapdExtendedOutCreator),
 		state: &state,
 	}
+	extendedState.Pub.StartAutoPublish(time.Second)
+	defer extendedState.Pub.Stop()
 	defer extendedState.Pub.Pub.Msgq.Close()
 
 	pub := cereal.NewPublisher("mapdOut", cereal.MapdOutCreator)
+	pub.StartAutoPublish(ms.LOOP_DELAY)
+	defer pub.Stop()
 	defer pub.Pub.Msgq.Close()
 	state.Publisher = &pub
 
@@ -56,16 +60,26 @@ func main() {
 	selfdriveState := cereal.NewSubscriber("selfdriveState", cereal.SelfdriveStateReader, true, ms.Settings.SubscriberSettings.ShadowSelfdriveState)
 	defer selfdriveState.Sub.Msgq.Close()
 
+	lastLoopTime := time.Now()
+
 	for {
-		err := state.Send() // send beginning of each loop to ensure it happens at the correct rate
+		lastLoopDuration := time.Since(lastLoopTime)
+		time.Sleep(max(ms.LOOP_DELAY-lastLoopDuration, 0))
+		now := time.Now()
+		extendedState.LoopRate.Add(now.Sub(lastLoopTime))
+		lastLoopTime = now
+
+		// Publish() only queues the latest state; the publisher's own
+		// auto-publish loop owns the actual on-wire send rate, resending
+		// the last message with a fresh timestamp if this loop stalls.
+		err := state.Send()
 		if err != nil {
 			slog.Error("Failed to send update", "error", err)
 		}
-		err = extendedState.Send() // this send is internally rate limited to 1 hz
+		err = extendedState.Send() // rebuilt at most once per second; publisher handles the send cadence
 		if err != nil {
 			slog.Error("Failed to send extended update", "error", err)
 		}
-		time.Sleep(ms.LOOP_DELAY)
 
 		// handle settings inputs from openpilot/cli
 		input, inputSuccess := sub.Read()
