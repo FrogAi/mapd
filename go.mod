@@ -9,7 +9,6 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/gofrs/flock v0.13.0
-	github.com/jonas-p/go-shp v0.1.1
 	github.com/paulmach/orb v0.1.3
 	github.com/paulmach/osm v0.8.0
 	github.com/pfeiferj/gomsgq v0.1.11

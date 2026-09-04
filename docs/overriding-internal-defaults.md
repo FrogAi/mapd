@@ -38,9 +38,8 @@ values are always loaded upon starting mapd.
 
 ## Download Menu
 The download menu file is used for two purposes. When triggering a download, the
-area names given to mapd locate an entry in the download menu. Its non-empty
-`archive_ranges` select the archives when provided; otherwise its `bounding_box`
-is used. The download menu file is also used to create a dynamic
+area names given to mapd are used to locate the appropriate bounding box from
+the download menu file. The download menu file is also used to create a dynamic
 menu in the mapd cli for selecting areas to download. This means that additional
 areas not provided by mapd can be added as options for downloads by copying the
 download\_menu.json to /data/openpilot/mapd\_download\_menu.json and then adding
@@ -84,16 +83,11 @@ any desired areas to the file. The structure is as follows:
             "max_lat"
           ]
         },
-        "archive_ranges": {
-          "description": "Rows of [minimum latitude, inclusive minimum longitude, exclusive maximum longitude] for 2-degree latitude bands.",
+        "download_rows": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "type": "array",
-            "items": {
-              "type": "integer",
-              "multipleOf": 2
-            },
+            "items": {"type": "integer"},
             "minItems": 3,
             "maxItems": 3
           }
@@ -117,12 +111,46 @@ exactly match a top level key in the main object. This value is not used by the
 cli tui however, so selecting an entry with a submenu in the tui will just
 result in that entry being downloaded.
 
-`archive_ranges` is optional, but takes precedence over `bounding_box` when
-non-empty. Each row must contain exactly three grid-aligned integers within the
-world bounds, and its maximum longitude must be greater than its minimum.
-Remove it to restore bounding-box selection. From the repository root, check
-the generated ranges with `go run ./cmd/update-download-regions` or update them
-with `go run ./cmd/update-download-regions --write`. Run the check after changing
-menu bounds or source pins. Existing menu bounds select which disconnected
-source components belong to each region, so new countries and newly relevant
-detached territories require an intentional menu change.
+An optional `download_rows` selects archives within the bounding box. Each row
+is `[latitude, first_longitude, exclusive_last_longitude]`, with coordinates on
+the 2-degree archive grid. For example, `[48, -124, -120]` downloads
+`offline/48/-124.tar.gz` and `offline/48/-122.tar.gz`. Rows must be sorted by
+latitude then longitude, must not overlap, and must stay inside the bounding
+box rounded outward to the archive grid. Missing, empty, or invalid rows use
+the full bounding box. Downloads and progress totals use the same selection.
+Remove the rows when changing an area's bounds unless you also update its
+selection. Existing menus with only bounding boxes continue to work.
+
+### Generating archive selections
+
+`mapd generate-download-menu` adds rows to an existing menu from local Natural
+Earth 10m country and state/province GeoJSON files. This is an optional data
+generation step; it does not run during map generation or require downloading
+the OSM planet. Custom entries without matching geometry keep their bounding
+boxes. Names, menu keys, submenus, and bounding boxes are retained.
+
+The included rows use the [Natural Earth source](https://github.com/nvkelso/natural-earth-vector/tree/ca96624a56bd078437bca8184e78163e5039ad19)
+at `ca96624a56bd078437bca8184e78163e5039ad19`. To regenerate from the repository root:
+
+```sh
+source_url=https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson
+curl -fL "$source_url/ne_10m_admin_0_countries.geojson" -o /tmp/countries.geojson
+curl -fL "$source_url/ne_10m_admin_1_states_provinces.geojson" -o /tmp/states.geojson
+./build/mapd generate-download-menu --countries /tmp/countries.geojson --states /tmp/states.geojson \
+  --menu settings/download_menu.json --output /tmp/download_menu.json
+```
+
+Review the output before replacing a default or custom menu. The input SHA-256
+hashes are `239eec57ac17f100a11e2536cffc56752c318b50ae765b0918ff7aab4ce8f255`
+(countries) and `22d0e3ad85eb3e27f17cabf8ba2d50e554fbc27a87796ff891d958185da62fb5`
+(states). The source data is [public domain](https://www.naturalearthdata.com/about/terms-of-use/).
+
+Generation keeps archives intersecting outer polygon rings, including islands,
+within each existing bounding box's archive grid. Intersection checks allow a
+0.05-degree margin for coarse coastlines near archive edges. This retained two
+coastal cells found by comparison with an independent Canada boundary; it is
+not a universal boundary-accuracy guarantee. Holes and degenerate clipping
+results can conservatively retain extra archives. Morocco, Somalia, and Ukraine retain their full bounding boxes
+because the source's territory assignments would narrow the existing entries.
+These are coarse download selections, not authoritative administrative borders;
+maintain custom regions through the existing menu override.
