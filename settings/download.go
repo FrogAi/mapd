@@ -113,38 +113,6 @@ func (p *DownloadProgress) addLocationDetails(path string) {
 	}
 }
 
-func (p DownloadProgress) clone() DownloadProgress {
-	clone := p
-	clone.LocationsToDownload = append([]string(nil), p.LocationsToDownload...)
-	clone.LocationDetails = make(map[string]*DownloadLocationDetail, len(p.LocationDetails))
-	for path, detail := range p.LocationDetails {
-		if detail == nil {
-			clone.LocationDetails[path] = nil
-			continue
-		}
-		detailCopy := *detail
-		clone.LocationDetails[path] = &detailCopy
-	}
-	return clone
-}
-
-func (d *download) publishProgress() {
-	progress := d.progress.clone()
-	select {
-	case d.progressChan <- progress:
-		return
-	default:
-	}
-	select {
-	case <-d.progressChan:
-	default:
-	}
-	select {
-	case d.progressChan <- progress:
-	default:
-	}
-}
-
 func Download(paths string, progressChan chan DownloadProgress, cancelChan chan bool) {
 	slog.Info("download", "paths", paths)
 	pathsSplit := strings.Split(paths, ",")
@@ -173,7 +141,27 @@ func Download(paths string, progressChan chan DownloadProgress, cancelChan chan 
 		}
 	}
 	d.progress.Active = false
-	d.publishProgress() // nonblocking update of progress
+	d.publishProgress()
+}
+
+func (d *download) publishProgress() {
+	progress := d.progress
+	progress.LocationsToDownload = append([]string(nil), d.progress.LocationsToDownload...)
+	progress.LocationDetails = make(map[string]*DownloadLocationDetail, len(d.progress.LocationDetails))
+	for path, detail := range d.progress.LocationDetails {
+		locationDetail := *detail
+		progress.LocationDetails[path] = &locationDetail
+	}
+
+	// Replace queued progress in the settings owner's one-slot channel.
+	select {
+	case <-d.progressChan:
+	default:
+	}
+	select {
+	case d.progressChan <- progress:
+	default:
+	}
 }
 
 func adjustedBounds(bounds Bounds) (int, int, int, int) {
@@ -199,8 +187,8 @@ func (d *download) downloadBounds(bounds Bounds, locationName string) (err error
 	d.progress.LocationDetails[locationName].TotalFiles = countFilesForBounds(bounds)
 	for i := minLat; i < maxLat; i += GROUP_AREA_BOX_DEGREES {
 		for j := minLon; j < maxLon; j += GROUP_AREA_BOX_DEGREES {
-			d.publishProgress() // nonblocking update of progress
-			select {            // cancel if sent message
+			d.publishProgress()
+			select { // cancel if sent message
 			case cancel := <-d.cancelChan:
 				if cancel {
 					return nil, true
