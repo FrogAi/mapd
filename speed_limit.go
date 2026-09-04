@@ -88,8 +88,8 @@ func (s *SpeedLimitState) SpeedLimitFinalSuggestion(enableSpeedActive bool, setS
 }
 
 func (s *SpeedLimitState) SuggestNewSpeedLimit(currentWay CurrentWay, car CarState) float32 {
-	s.Limit.Update(ms.Settings.PrioritySpeedLimit(float32(currentWay.EffectiveMaxSpeed())))
-	currentLimit := s.Limit.Value
+	currentLimit := ms.Settings.PrioritySpeedLimit(float32(currentWay.EffectiveMaxSpeed()))
+	s.Limit.Update(currentLimit)
 	if currentLimit == 0 && ms.Settings.SpeedLimitSettings.HoldLastSeenSpeedLimit {
 		currentLimit = s.Limit.LastValue
 	}
