@@ -116,22 +116,6 @@ func generateAreas() []Area {
 	return areas
 }
 
-func normalizeWayDirection(tags map[string]string, way *TmpWay) {
-	switch tags["oneway"] {
-	case "yes", "1":
-		way.OneWay = true
-	case "-1":
-		way.OneWay = true
-		slices.Reverse(way.Nodes)
-		way.MaxSpeedForward, way.MaxSpeedBackward = way.MaxSpeedBackward, way.MaxSpeedForward
-		way.MaxSpeedForwardConditional, way.MaxSpeedBackwardConditional = way.MaxSpeedBackwardConditional, way.MaxSpeedForwardConditional
-	case "":
-		way.OneWay = tags["junction"] == "roundabout" || tags["highway"] == "motorway"
-	default:
-		way.OneWay = false
-	}
-}
-
 func GenerateOffline(s OfflineSettings) {
 	slog.Info("Generating Offline Map")
 	EnsureOfflineMapsDirectories(s)
@@ -206,7 +190,17 @@ func GenerateOffline(s OfflineSettings) {
 				tmpWay.Nodes[i].Latitude = n.Lat
 				tmpWay.Nodes[i].Longitude = n.Lon
 			}
-			normalizeWayDirection(tags, &tmpWay)
+			switch tags["oneway"] {
+			case "yes", "1":
+				tmpWay.OneWay = true
+			case "-1":
+				tmpWay.OneWay = true
+				slices.Reverse(tmpWay.Nodes)
+				tmpWay.MaxSpeedForward, tmpWay.MaxSpeedBackward = tmpWay.MaxSpeedBackward, tmpWay.MaxSpeedForward
+				tmpWay.MaxSpeedForwardConditional, tmpWay.MaxSpeedBackwardConditional = tmpWay.MaxSpeedBackwardConditional, tmpWay.MaxSpeedForwardConditional
+			case "":
+				tmpWay.OneWay = tags["junction"] == "roundabout" || tags["highway"] == "motorway"
+			}
 			tmpWay.Box.MinPos = m.NewPosition(minLat, minLon)
 			tmpWay.Box.MaxPos = m.NewPosition(maxLat, maxLon)
 			if minLat < allMinLat {
