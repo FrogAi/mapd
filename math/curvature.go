@@ -18,11 +18,24 @@ func CalculateCurvature(a Position, b Position, c Position) Curvature {
 		return Curvature{Pos: b}
 	}
 
-	semiperimeter := (distanceAB + distanceAC + distanceBC) / 2
-	areaSquared := semiperimeter * (semiperimeter - distanceAB) * (semiperimeter - distanceAC) * (semiperimeter - distanceBC)
-	// Rounding can make the squared area slightly negative for nearly straight roads.
+	longestSide, middleSide, shortestSide := distanceAB, distanceAC, distanceBC
+	if longestSide < middleSide {
+		longestSide, middleSide = middleSide, longestSide
+	}
+	if longestSide < shortestSide {
+		longestSide, shortestSide = shortestSide, longestSide
+	}
+	if middleSide < shortestSide {
+		middleSide, shortestSide = shortestSide, middleSide
+	}
+
+	// Sorted-side Heron arithmetic reduces cancellation for nearly straight roads.
+	areaProduct := (longestSide + (middleSide + shortestSide)) *
+		(shortestSide - (longestSide - middleSide)) *
+		(shortestSide + (longestSide - middleSide)) *
+		(longestSide + (middleSide - shortestSide))
 	res := Curvature{Pos: b}
-	res.Curvature = 4 * m.Sqrt(max(0, areaSquared)) / distanceProduct
+	res.Curvature = m.Sqrt(max(0, areaProduct)) / distanceProduct
 	if res.Curvature == 0 {
 		res.ArcLength = distanceAC
 		return res

@@ -44,6 +44,7 @@ func (p *Position) distanceTo(end Position) float64 {
 	latDiff := end.LatRad() - p.LatRad()
 	lonDiff := end.LonRad() - p.LonRad()
 	a := m.Pow(m.Sin(latDiff/2), 2) + m.Cos(p.LatRad())*m.Cos(end.LatRad())*m.Pow(m.Sin(lonDiff/2), 2)
+	a = min(1, a)
 	c := 2 * m.Atan2(m.Sqrt(a), m.Sqrt(1-a))
 
 	return ms.R * c // in metres
