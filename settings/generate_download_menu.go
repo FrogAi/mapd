@@ -21,12 +21,32 @@ func GenerateDownloadMenu(menuFile, countriesFile, statesFile, outputFile string
 	if err := json.Unmarshal(data, &menu); err != nil {
 		return err
 	}
+	if menu == nil {
+		return fmt.Errorf("%s: expected menu object", menuFile)
+	}
 
 	regions := make(map[string][]orb.Ring)
 	for index, filename := range []string{countriesFile, statesFile} {
 		data, err := os.ReadFile(filename)
 		if err != nil {
 			return err
+		}
+		// Validate nullable objects before the GeoJSON decoder dereferences geometry.
+		var collection struct {
+			Features []*struct {
+				Geometry *struct{} `json:"geometry"`
+			} `json:"features"`
+		}
+		if err := json.Unmarshal(data, &collection); err != nil {
+			return fmt.Errorf("%s: %w", filename, err)
+		}
+		for featureIndex, feature := range collection.Features {
+			if feature == nil {
+				return fmt.Errorf("%s: feature %d is null", filename, featureIndex)
+			}
+			if feature.Geometry == nil {
+				return fmt.Errorf("%s: feature %d has no geometry", filename, featureIndex)
+			}
 		}
 		features, err := geojson.UnmarshalFeatureCollection(data)
 		if err != nil {
