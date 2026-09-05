@@ -43,13 +43,13 @@ func (s *SpeedLimitState) Update(currentWay CurrentWay, car CarState) {
 
 func (s *SpeedLimitState) UpdateLimitAcceptedState(car CarState) {
 	timeout := ms.Settings.SpeedLimitSettings.AcceptSpeedLimitTimeout
-	if timeout > 0 && time.Since(s.Limit.UpdatedTime) > time.Duration(timeout)*time.Second {
+	if timeout > 0 && time.Since(s.Suggestion.UpdatedTime) > time.Duration(timeout)*time.Second {
 		return
 	}
 	if ms.Settings.SpeedLimitSettings.PressGasToAcceptSpeedLimit && car.GasPressed {
 		ms.Settings.AcceptSpeedLimit()
 	}
-	if ms.Settings.SpeedLimitSettings.AdjustSetSpeedToAcceptSpeedLimit && car.SetSpeed.UpdatedTime.After(s.Limit.UpdatedTime) {
+	if ms.Settings.SpeedLimitSettings.AdjustSetSpeedToAcceptSpeedLimit && car.SetSpeed.UpdatedTime.After(s.Suggestion.UpdatedTime) {
 		if ms.Settings.SpeedLimitAccepted() && s.SetSpeedWhenAccepted != car.SetSpeed.Value {
 			ms.Settings.ResetSpeedLimitAccepted()
 		}
