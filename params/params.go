@@ -115,7 +115,11 @@ func PutParam(path string, data []byte) error {
 	if err != nil {
 		return errors.Wrap(err, "could not create temp param file")
 	}
-	defer file.Close()
+	defer func() {
+		if file != nil {
+			file.Close()
+		}
+	}()
 	tmpName := file.Name()
 	defer os.Remove(tmpName)
 
@@ -127,6 +131,11 @@ func PutParam(path string, data []byte) error {
 	err = file.Sync()
 	if err != nil {
 		return errors.Wrap(err, "could not fsync temp param file")
+	}
+	err = file.Close()
+	file = nil
+	if err != nil {
+		return errors.Wrap(err, "could not close temp param file")
 	}
 
 	fileLock := flock.New(filepath.Join(lock_dir, ".lock"), flock.SetPermissions(0o775))
@@ -162,11 +171,13 @@ func PutParam(path string, data []byte) error {
 	if err != nil {
 		return errors.Wrap(err, "could not open params directory")
 	}
-	defer directory.Close()
-
 	err = directory.Sync()
+	closeErr := directory.Close()
 	if err != nil {
 		return errors.Wrap(err, "could not fsync params directory")
+	}
+	if closeErr != nil {
+		return errors.Wrap(closeErr, "could not close params directory")
 	}
 
 	return nil
@@ -205,11 +216,13 @@ func RemoveParam(path string) error {
 	if err != nil {
 		return errors.Wrap(err, "could not open params directory")
 	}
-	defer directory.Close()
-
 	err = directory.Sync()
+	closeErr := directory.Close()
 	if err != nil {
 		return errors.Wrap(err, "could not fsync params directory")
+	}
+	if closeErr != nil {
+		return errors.Wrap(closeErr, "could not close params directory")
 	}
 
 	return nil
