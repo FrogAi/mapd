@@ -153,8 +153,7 @@ func (d *download) publishProgress() {
 		progress.LocationDetails[path] = &locationDetail
 	}
 
-	// Replace queued progress in the settings owner's one-slot channel.
-	select {
+	select { // discard queued progress
 	case <-d.progressChan:
 	default:
 	}
