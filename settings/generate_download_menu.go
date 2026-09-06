@@ -100,8 +100,7 @@ func GenerateDownloadMenu(menuFile, countriesFile, statesFile, outputFile string
 						Min: orb.Point{float64(longitude), float64(row[0])},
 						Max: orb.Point{float64(longitude + GROUP_AREA_BOX_DEGREES), float64(row[0] + GROUP_AREA_BOX_DEGREES)},
 					}
-					// Allow for coarse coastlines near archive edges; verified against an independent Canada boundary.
-					cell = cell.Pad(0.05)
+					cell = cell.Pad(0.05) // allow for coarse coastlines near archive edges
 					for _, ring := range rings {
 						if !cell.Intersects(ring.Bound()) || len(clip.Ring(cell, ring.Clone())) == 0 {
 							continue
